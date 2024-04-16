@@ -1,4 +1,4 @@
-import sys, os, torch, sklearn, socket, time, pickle
+import sys, os, torch, sklearn, socket, time, pickle, io, binascii
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
@@ -32,6 +32,19 @@ client_ports = {"client1": 6001,
 def update_model(model):
     pass
 
+def model_to_bytes(model):
+    buffer = io.BytesIO()
+    torch.save(model.state_dict(), buffer)
+    return buffer.getvalue()
+
+def model_from_bytes(bytes):
+
+    buffer = io.BytesIO(bytes)
+    state_dict = torch.load(buffer)
+
+    model = nn.Linear(state_dict['weight'].shape[1], state_dict['weight'].shape[0])
+    model.load_state_dict(state_dict)
+    return model
 
 client_port = client_ports.get(client_id)
 
@@ -51,7 +64,7 @@ receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))
 
 while True:
-    message, server_address = receive_socket.recvfrom(1024)
+    message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
     print("Received:", message)
     if not message or message["type"] == "finish":
