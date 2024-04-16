@@ -23,6 +23,7 @@ sub_client = sys.argv[2]
 
 
 client_list = [None, None, None, None, None]
+temp_client_list = [None, None, None, None, None]
 
 client_num = {"client1": 1, 
                "client2": 2,
@@ -37,6 +38,8 @@ client_ports = {"client1": 6001,
                "client4": 6004,
                "client5": 6005
 }
+
+thirty_seconds_elapsed = False
 
 #Adds the clients into a list 
 def handle_client(packet, recv_socket, client_address):
@@ -53,11 +56,42 @@ def handle_client(packet, recv_socket, client_address):
     client_list[client_num.get(client_id)-1] = new_client
     print(packet)
 
+def handle_late_client(packet, recv_socket, client_address):
+    client_id = packet['id']
+    client_data_size = packet['data_size']
+    client_port = client_ports.get(client_id)
+    print(f"getting handshake from client {client_id}")
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((ADDRESS, client_port))
+    s.listen()
+    send_socket, client_address = s.accept()
+    new_client = Client(client_id, recv_socket,send_socket, client_address, client_data_size)
+    temp_client_list[client_num.get(client_id)-1] = new_client
+
+def update_client_list():
+    for i in range(0,5):
+        if client_list[i] == None:
+            if temp_client_list[i] != None:
+                client_list[i] = temp_client_list[i]
+
+def print_client_list():
+    for c in client_list:
+        if c != None:
+            print(c.get_client_id())
+        else:
+            print("None")
+
+
 #Runs while the initil 30 seconds is over in a different thread to add more clients.
 def add_additional_clients(message, recv_socket, client_address):
     while True:
-        client_thread = threading.Thread(target=handle_client, args=(message, recv_socket, client_address))
-        client_thread.start()
+        if thirty_seconds_elapsed:
+            client_thread = threading.Thread(target=handle_late_client, args=(message, recv_socket, client_address))
+            client_thread.start()
+
+        else:
+            client_thread = threading.Thread(target=handle_client, args=(message, recv_socket, client_address))
+            client_thread.start()
 
 def send_finish_message(client_list):
     message = "Training Completed"
@@ -123,6 +157,8 @@ try:
 except socket.timeout:
     print("30 Seconds Elapsed Since First Connection")
 
+
+thirty_seconds_elapsed = True
 s.settimeout(None)
 listen_thread = threading.Thread(target=listening_loop, args=(s,))
 listen_thread.start()
