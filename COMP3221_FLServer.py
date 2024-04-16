@@ -21,95 +21,62 @@ INPUT_FEATURES = 8
 port = int(sys.argv[1])
 sub_client = sys.argv[2]
 
+class Client:
+    def __init__(self, port):
+        self.data_size = 0
+        self.port = port
+        self.active = False
+        self.in_queue = False
+        self.latest_model = None
+        self.latest_round = 0
 
-client_list = [None, None, None, None, None]
-temp_client_list = [None, None, None, None, None]
 
-client_num = {"client1": 1, 
-               "client2": 2,
-               "client3": 3,
-               "client4": 4,
-               "client5": 5
+clients = {
+    'client1' : Client(6001),
+    'client2' : Client(6002),
+    'client3' : Client(6003),
+    'client4' : Client(6004),
+    'client5' : Client(6005)
 }
 
-client_ports = {"client1": 6001, 
-               "client2": 6002,
-               "client3": 6003,
-               "client4": 6004,
-               "client5": 6005
-}
 
-thirty_seconds_elapsed = False
+# thirty_seconds_elapsed = False
 
-#Adds the clients into a list 
-def handle_client(packet, recv_socket, client_address):
-    client_id = packet['id']
-    client_data_size = packet['data_size']
-    client_port = client_ports.get(client_id)
-    print(f"getting handshake from client {client_id}")
+# def update_client_list():
+#     for i in range(0,5):
+#         if client_list[i] == None:
+#             if temp_client_list[i] != None:
+#                 client_list[i] = temp_client_list[i]
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((ADDRESS, client_port))
-    s.listen()
-    send_socket, client_address = s.accept()
-    new_client = Client(client_id, recv_socket,send_socket, client_address, client_data_size)
-    client_list[client_num.get(client_id)-1] = new_client
-    print(packet)
-
-def handle_late_client(packet, recv_socket, client_address):
-    client_id = packet['id']
-    client_data_size = packet['data_size']
-    client_port = client_ports.get(client_id)
-    print(f"getting handshake from client {client_id}")
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((ADDRESS, client_port))
-    s.listen()
-    send_socket, client_address = s.accept()
-    new_client = Client(client_id, recv_socket,send_socket, client_address, client_data_size)
-    temp_client_list[client_num.get(client_id)-1] = new_client
-
-def update_client_list():
-    for i in range(0,5):
-        if client_list[i] == None:
-            if temp_client_list[i] != None:
-                client_list[i] = temp_client_list[i]
-
-def print_client_list():
-    for c in client_list:
-        if c != None:
-            print(c.get_client_id())
-        else:
-            print("None")
+# def print_client_list():
+#     for c in client_list:
+#         if c != None:
+#             print(c.get_client_id())
+#         else:
+#             print("None")
 
 
-#Runs while the initil 30 seconds is over in a different thread to add more clients.
-def add_additional_clients(message, recv_socket, client_address):
-    while True:
-        if thirty_seconds_elapsed:
-            client_thread = threading.Thread(target=handle_late_client, args=(message, recv_socket, client_address))
-            client_thread.start()
+def send_finish_message():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    message = pickle.dumps({"type": "finish"})
+    print("Sending finish message")
+    for id in clients.keys():
+        client = clients[id]
+        sock.sendto(message, (ADDRESS,client.port))
 
-        else:
-            client_thread = threading.Thread(target=handle_client, args=(message, recv_socket, client_address))
-            client_thread.start()
-
-def send_finish_message(client_list):
-    message = "Training Completed"
-    for c in client_list:
-        if c:
-            c.get_send_socket().sendall(message.encode())
-
-def close_sockets(client_list):
-    for c in client_list:
-        if c:
-            c.get_send_socket().close()
-            c.get_recv_socket().close()
+def add_client(id, data_size):
+    if clients[id] == True:
+        raise Exception
+    clients[id].active = True
+    clients[id].in_queue = True
+    clients[id].data_size = data_size
+    print(f"Received handshake from client {id}")
 
 def receive_packet(socket):
-    recv_socket, client_address = s.accept()
-    message = pickle.loads(recv_socket.recv(1024))
+    message, client_address = socket.recvfrom(1024)
+    message = pickle.loads(message)
     if message["type"] == "handshake":
-        add_additional_clients(message, recv_socket, client_address)
+        add_client(message['id'], message['data_size'])
     if message["type"] == "model":
         add_model(message["model"])
 
@@ -120,58 +87,70 @@ def listening_loop(socket):
 def add_model(message):
     client_id = message['id']
     model = message['model']
+    model_round = message['round']
     print(f"getting local model from client {client_id}")
+    clients[client_id].latest_model = model
+    clients[client_id].latest_round = model_round
+
+def aggregate_models(round_number) -> LinearRegressionModel:
+    models = []
+    for id in clients.keys():
+        client = clients[id]
+        if client.active and client.latest_round == round_number:
+            models.append(client.latest_model)
+    
+    ### do some maths to aggregate the models
 
 def distribute_global_model(model):
     message = pickle.dumps({
         "type" : "model",
         "model" : model
     })
-    for client in client_list:
+    for id in clients.keys():
+        client = clients[id]
         pass #TODO
 
 if port != 6000:
     print("Port Server Must be 6000")
 
-global_model = LinearRegressionModel(INPUT_FEATURES)
-#gets w0
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((ADDRESS, port))
-s.listen()
+# s.listen()
 
 #Waits until first connection is made and adds it to client list.
-recv_socket, client_address = s.accept()
-client_thread = threading.Thread(target=receive_packet, args=(s))
-client_thread.start()
+
+message, client_address = s.recvfrom(1024)
+message = pickle.loads(message)
+if message["type"] == "handshake":
+    add_client(message['id'], message['data_size'])
+if message["type"] == "model":
+    add_model(message)
 
 #Once the first connection is made, the program waits 30 seconds before moving on.
 #5 is just the placeholder time
 
 s.settimeout(5)
-try:
-    while True:
-        recv_socket, client_address = s.accept()
-        client_thread = threading.Thread(target=receive_packet, args=(s))
-        client_thread.start()
-except socket.timeout:
-    print("30 Seconds Elapsed Since First Connection")
 
-
-thirty_seconds_elapsed = True
+# thirty_seconds_elapsed = True
 s.settimeout(None)
+
 listen_thread = threading.Thread(target=listening_loop, args=(s,))
 listen_thread.start()
-
 
 print("Starting Federated Learning Now")
 #do federated learning here
 time.sleep(1)
 
+# global_model = LinearRegressionModel(INPUT_FEATURES)
+global_model = nn.Linear(INPUT_FEATURES, 1)
+#gets w0
+print(f"global model: {global_model.weight}")
+print(f"global model: {global_model.bias}")
+
 
 #After T training rounds are completed, send finish messages to clients and close sockets
-send_finish_message(client_list)
-close_sockets(client_list)
+send_finish_message()
 
 
-s.close()
+# s.close()

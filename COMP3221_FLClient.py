@@ -29,36 +29,42 @@ client_ports = {"client1": 6001,
                "client5": 6005
 }
 
+def update_model(model):
+    pass
+
+
 client_port = client_ports.get(client_id)
 
 
-send_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-send_socket.connect((ADDRESS, SERVER_PORT))
+send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+# send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
                 "data_size" : data_size}
 message_bytes = pickle.dumps(client_message)
 
-send_socket.sendall(message_bytes) 
-print("sent message")
+send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
+print("sent handshake")
 time.sleep(1)
-receive_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-receive_socket.connect((ADDRESS, client_port))
-
+receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+receive_socket.bind((ADDRESS,client_port))
+# receive_socket.connect((ADDRESS, client_port))
 
 while True:
-    message = receive_socket.recv(1024)
-    if not message:
+    message, server_address = receive_socket.recvfrom(1024)
+    message = pickle.loads(message)
+    print("Received:", message)
+    if not message or message["type"] == "finish":
         break
-    print("Received:", message.decode())
-    if message == "Training Completed":
-        False
-    
+    if message["type"] == "model":
+        print("received model from server")
+        update_model(message['id'], message['data_size'])
+
 
 time.sleep(1)
 
-send_socket.close()
-receive_socket.close()
+# send_socket.close()
+# receive_socket.close()
 
 
 
