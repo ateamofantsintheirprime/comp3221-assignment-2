@@ -19,8 +19,10 @@ client_port = int(sys.argv[2])
 ADDRESS = '127.0.0.1'
 SERVER_PORT = 6000
 LOCAL_EPOCHS = 4
-opt_method = sys.argv[3]
-data_size = 10
+LEARNING_RATE = .01
+INPUT_FEATURES = 8
+opt_method = bool(sys.argv[3])
+batch_size = 64 # ?
 
 client_ports = {"client1": 6001, 
                "client2": 6002,
@@ -29,8 +31,6 @@ client_ports = {"client1": 6001,
                "client5": 6005
 }
 
-def update_model(model):
-    pass
 
 def model_to_bytes(model):
     buffer = io.BytesIO()
@@ -46,6 +46,37 @@ def model_from_bytes(bytes):
     model.load_state_dict(state_dict)
     return model
 
+def update_model(model):
+    # Copy new model data to local model
+    for old, new in zip(local_model.parameters(), model.parameters()):
+        old.data = new.data.clone()
+    print(f"updating local model to {model}")
+
+def train(model):
+    pass
+
+def test(model):
+    pass
+
+def send_model(model):
+    model_bytes = model_to_bytes(model)
+    client_message = {"type": "model",
+                "model" : model_bytes,
+                "round" : round_number}
+    send_socket.sendto(client_message, (ADDRESS,SERVER_PORT))
+
+def get_training_data():
+    pass
+
+def get_testing_data():
+    pass
+
+def get_X():
+    pass
+
+def get_Y():
+    pass
+
 client_port = client_ports.get(client_id)
 
 
@@ -53,7 +84,7 @@ send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
-                "data_size" : data_size}
+                "data_size" : BATCH_SIZE}
 message_bytes = pickle.dumps(client_message)
 
 send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
@@ -63,6 +94,34 @@ receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))
 
+# Set up data for training and testing.
+
+train_data = get_training_data()
+train_X = get_X(train_data)
+train_Y = get_Y(train_data)
+test_data = get_testing_data()
+test_X = get_X(test_data)
+test_y = get_Y(test_data)
+
+train_data = [(x, y) for x, y in zip(train_X, train_Y)]
+test_data = [(x, y) for x, y in zip(test_X, test_y)]
+
+if not opt_method: # Set batch size to full training data size for regular GD
+    batch_size = len(train_Y)
+
+trainloader = DataLoader(train_data, batch_size=batch_size)
+testloader = DataLoader(train_data, batch_size=len(test_y))
+
+# Define loss function
+
+loss = nn.MSELoss()
+
+local_model = nn.Linear(INPUT_FEATURES, 1)
+
+
+optimiser = torch.optim.SGD(local_model.parameters(), lr=LEARNING_RATE)
+
+round_number = 0
 while True:
     message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
@@ -71,7 +130,11 @@ while True:
         break
     if message["type"] == "model":
         print("received model from server")
-        update_model(message['id'], message['data_size'])
+        model = model_from_bytes(message['model'])
+        update_model(model)
+        round_number = message["round"]
+        train(model)
+        send_model(model)
 
 
 time.sleep(1)
