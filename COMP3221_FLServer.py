@@ -13,7 +13,6 @@ from sklearn.model_selection import train_test_split
 
 
 COMMUNICATION_ROUNDS = 100
-LEARNING_RATE = .01
 BATCH_SIZE = 64
 CLIENT_COUNT = 5 # dont change this
 ADDRESS = '127.0.0.1'
@@ -78,20 +77,47 @@ def listening_loop(socket):
 
 def add_model(message):
     client_id = message['id']
-    model = message['model']
-    model_round = message['round']
     print(f"getting local model from client {client_id}")
-    clients[client_id].latest_model = model
-    clients[client_id].latest_round = model_round
+    if client_id not in clients.keys():
+        print(f"error, client {client_id} attempted to send a model before handshaking")
+        return
+    clients[client_id].latest_model = message['model']
+    clients[client_id].latest_round = message['round']
+
+def wait_for_client_training(round_number):
+    all_clients_completed = False
+    while not all_clients_completed:
+        all_clients_completed = True
+        for c in clients.values():
+            if c.latest_round != round_number:
+                all_clients_completed = False
+                time.sleep(1) # dont want to spam too hard
+                break
+
+def get_total_data_size() -> int:
+    sum([c.data_size for c in clients.keys()])
+
 
 def aggregate_models(round_number) -> LinearRegressionModel:
-    models = []
-    for id in clients.keys():
-        client = clients[id]
-        if client.active and client.latest_round == round_number:
-            models.append(client.latest_model)
+    # Zero out global model
+    for param in global_model.parameters():
+        param.data = torch.zeros_like(param.data)
     
-    ### do some maths to aggregate the models
+    # Not all clients will be active
+    usable_clients = [c for c in clients.value() if c.active]
+    
+    # Get selection of clients for aggregating based on subsampling specifications
+    aggregate_clients = usable_clients
+    if sub_client != 0:
+        # This line will cause issues if < K clients have provided a model this round. Consult specs
+        aggregate_clients = random.sample(usable_clients, sub_client)
+
+    # Aggregate sampled client models into global model
+    for client in aggregate_clients():
+        sample_size_ratio = client.data_size / get_total_data_size()
+        global_model.data += client.latest_model.data.clone() * sample_size_ratio
+    
+    return global_model
 
 def model_to_bytes(model):
     buffer = io.BytesIO()
@@ -107,16 +133,17 @@ def model_from_bytes(bytes):
     model.load_state_dict(state_dict)
     return model
 
-def distribute_global_model(model):
+def distribute_global_model(model, round_number):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     model_bytes = model_to_bytes(model)
     # model_hex = binascii.hexlify(model_bytes).decode('utf-8')
 
     message = pickle.dumps({
         "type" : "model",
-        "model" : model_bytes
+        "model" : model_bytes,
+        "round" : round_number
     })
-    print(message)
+    # print(message)
     for id in clients.keys():
         client = clients[id]
         sock.sendto(message, (ADDRESS, client.port))
@@ -124,12 +151,13 @@ def distribute_global_model(model):
 if port != 6000:
     print("Port Server Must be 6000")
 
+
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((ADDRESS, port))
 
 #Waits until first connection is made and adds it to client list.
 
-message, client_address = s.recvfrom(1024)
+message, client_address = s.recvfrom(2048)
 message = pickle.loads(message)
 if message["type"] == "handshake":
     add_client(message['id'], message['data_size'])
@@ -151,18 +179,12 @@ print("Starting Federated Learning Now")
 #do federated learning here
 time.sleep(1)
 
-# global_model = LinearRegressionModel(INPUT_FEATURES)
 global_model = nn.Linear(INPUT_FEATURES, 1)
-distribute_global_model(global_model)
-# Load the tensor from the byte array
-# w = torch.from_buffer(weight_bytes, dtype=torch.float32)
-# b = torch.from_buffer(bias_bytes, dtype=torch.float32)
 
-# print("Loaded weights:")
-# print(w)
-# print("Loaded biases:")
-# print(b)
-
+for i in range(COMMUNICATION_ROUNDS):
+    distribute_global_model(global_model, i)
+    wait_for_client_training(i)
+    aggregate_models(i)
 
 #After T training rounds are completed, send finish messages to clients and close sockets
 send_finish_message()

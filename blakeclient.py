@@ -23,6 +23,7 @@ LEARNING_RATE = .01
 INPUT_FEATURES = 8
 opt_method = bool(sys.argv[3])
 batch_size = 64 # ?
+
 client_ports = {"client1": 6001, 
                "client2": 6002,
                "client3": 6003,
@@ -51,7 +52,7 @@ def update_model(model):
         old.data = new.data.clone()
     print(f"updating local model to {model}")
 
-def train(model, epochs, optimiser, loss, trainloader):
+def train(model, epochs, optimiser):
     LOSS = 0
     model.train()
     for epoch in range(1, epochs + 1):
@@ -59,32 +60,26 @@ def train(model, epochs, optimiser, loss, trainloader):
         for batch_idx, (X, y) in enumerate(trainloader):
             optimiser.zero_grad()
             output = model(X)
-            loss_val = loss(output, y)
-            loss_val.backward()
+            loss = loss(output, y)
+            loss.backward()
             optimiser.step()
-    return loss_val.data, optimiser, loss, trainloader
+    return loss.data, optimiser
 
-def test(model, testloader):
+def test(model):
     model.eval()
     mse = 0
     for x, y in testloader:
         y_pred = model(x)
         # Calculate evaluation metrics
         mse += loss(y_pred, y)
-    return mse, testloader
+    return mse
 
 
 def send_model(model):
     model_bytes = model_to_bytes(model)
-    client_message = pickle.dumps({"type": "model",
-                "model" : model_bytes,
-                "round" : round_number})
-                
-    """
     client_message = {"type": "model",
                 "model" : model_bytes,
                 "round" : round_number}
-                """
     send_socket.sendto(client_message, (ADDRESS,SERVER_PORT))
 
 """
@@ -171,7 +166,7 @@ send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
-                "data_size" : batch_size}
+                "data_size" : BATCH_SIZE}
 message_bytes = pickle.dumps(client_message)
 
 send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
@@ -213,7 +208,7 @@ optimiser = torch.optim.SGD(local_model.parameters(), lr=LEARNING_RATE)
 
 round_number = 0
 while True:
-    print("I am {}".format(client_id))
+    print("I am client {}".format(client_id))
     message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
     print("Received new global model")
@@ -227,13 +222,15 @@ while True:
         update_model(model)
         round_number = message["round"]
 
-        test_MSE, testloader = test(model, testloader)
+        test_MSE = test()
         print("Testing MSE: {}".format(test_MSE))
 
-        train_MSE, optimiser, loss, trainloader = train(model, LOCAL_EPOCHS, optimiser, loss, trainloader)
+
+        train_MSE, optimiser = train(model, LOCAL_EPOCHS, optimiser)
         print("Training MSE: {}".format(train_MSE))
 
         log_input = "TestMSE: {}, TrainMSE: {}\n".format(test_MSE, train_MSE)
+
         file_name = "Logs/" + client_id + ".txt"
         with open(file_name, "a") as myfile:
             myfile.write(log_input)
