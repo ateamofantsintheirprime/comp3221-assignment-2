@@ -68,16 +68,38 @@ receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))
 
-##########################
+####################
+####################
+####################
+####################
 
-#x_train, x_test, y_train, y_test, train_sample, test_sample = get_data(client_id)
-
+print("I am client {}".format(client_id))
+print("Received new global model")
+"""
 user = UserAVG(client_id, server_model, LEARNING_RATE, BATCH_SIZE)
 user.set_parameters(server_model)
 
+test_MSE = user.test()
+print("Testing MSE: {}".format(test_MSE))
 
-user.train(LOCAL_EPOCHS)
+print("Local training...")
+train_MSE = user.train(LOCAL_EPOCHS)
+print("Training MSE: {}".format(train_MSE))
+"""
+test_MSE = 6.0
+train_MSE = 3.122
+log_input = "TestMSE: {}, TrainMSE: {}\n".format(test_MSE, train_MSE)
 
+file_name = "Logs/" + client_id + ".txt"
+with open(file_name, "a") as myfile:
+    myfile.write(log_input)
+
+print("Sending new local model")
+
+####################
+####################
+####################
+####################
 
 """
 while True:
