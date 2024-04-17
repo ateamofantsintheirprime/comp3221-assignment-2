@@ -6,7 +6,6 @@ from LinearRegressionModel import *
 
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
-from useravg import UserAVG
 
 import os
 import json
@@ -20,12 +19,19 @@ client_port = int(sys.argv[2])
 ADDRESS = '127.0.0.1'
 SERVER_PORT = 6000
 LOCAL_EPOCHS = 4
-LEARNING_RATE  = 0.1
-BATCH_SIZE = 50
-
-
 opt_method = sys.argv[3]
 data_size = 10
+
+##########################
+x_train = None
+x_test = None
+y_test = None
+y_train = None
+train_sample = 0
+test_sample = 0
+train_data = None
+test_data = None
+##########################
 
 client_ports = {"client1": 6001, 
                "client2": 6002,
@@ -33,6 +39,74 @@ client_ports = {"client1": 6001,
                "client4": 6004,
                "client5": 6005
 }
+
+##########################
+##########################
+def get_data(client):
+    train_MedInc = []
+    train_HouseAge = []
+    train_AveRooms = []
+    train_AveBedrms = []
+    train_Population = []
+    train_AveOccup = []
+    train_Latitude = []
+    train_Longitude = []
+    train_MedHouseVal = []
+
+    test_MedInc = []
+    test_HouseAge = []
+    test_AveRooms = []
+    test_AveBedrms = []
+    test_Population = []
+    test_AveOccup = []
+    test_Latitude = []
+    test_Longitude = []
+    test_MedHouseVal = []
+
+    filename = "FLData/calhousing_train_" + client + ".csv"
+    with open(filename, "r") as file:
+        #ignores the first line of names of dataset
+        next(file)
+        for line in file:
+            split_data = line.split(",")
+            train_MedInc.append(float(split_data[0]))
+            train_HouseAge.append(float(split_data[1]))
+            train_AveRooms.append(float(split_data[2]))
+            train_AveBedrms.append(float(split_data[3]))
+            train_Population.append(float(split_data[4]))
+            train_AveOccup.append(float(split_data[5]))
+            train_Latitude.append(float(split_data[6]))
+            train_Longitude.append(float(split_data[7]))
+            train_MedHouseVal.append(float(split_data[8]))
+
+    filename = "FLData/calhousing_test_" + client + ".csv"
+    with open(filename, "r") as file:
+        #ignores the first line of names of dataset
+        next(file)
+        for line in file:
+            split_data = line.split(",")
+            test_MedInc.append(float(split_data[0]))
+            test_HouseAge.append(float(split_data[1]))
+            test_AveRooms.append(float(split_data[2]))
+            test_AveBedrms.append(float(split_data[3]))
+            test_Population.append(float(split_data[4]))
+            test_AveOccup.append(float(split_data[5]))
+            test_Latitude.append(float(split_data[6]))
+            test_Longitude.append(float(split_data[7]))
+            test_MedHouseVal.append(float(split_data[8]))
+
+    x_train_np = np.column_stack((train_MedInc, train_HouseAge, train_AveRooms, train_AveBedrms, train_Population, train_AveOccup, train_Latitude, train_Longitude))
+    x_test_np = np.column_stack((test_MedInc, test_HouseAge, test_AveRooms, test_AveBedrms, test_Population, test_AveOccup, test_Latitude, test_Longitude))
+    
+    x_train = torch.Tensor(x_train_np).view(-1,8).type(torch.float32)
+    x_test = torch.Tensor(x_test_np).view(-1,8).type(torch.float32)
+    
+    y_train = torch.Tensor(train_MedHouseVal).type(torch.float32)
+    y_test = torch.Tensor(test_MedHouseVal).type(torch.float32)
+
+    return x_train, x_test, y_train, y_test, len(train_MedHouseVal), len(test_MedHouseVal)
+##########################
+##########################
 
 def update_model(model):
     pass
@@ -69,14 +143,8 @@ receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))
 
 ##########################
+x_train, x_test, y_train, y_test, train_sample, test_sample = get_data(client_id)
 
-#x_train, x_test, y_train, y_test, train_sample, test_sample = get_data(client_id)
-
-user = UserAVG(client_id, server_model, LEARNING_RATE, BATCH_SIZE)
-user.set_parameters(server_model)
-
-
-user.train(LOCAL_EPOCHS)
 
 
 """
