@@ -52,27 +52,28 @@ def update_model(model):
     print(f"updating local model to {model}")
 
 def train(model, epochs, optimiser, loss, trainloader):
-    LOSS = 0
     model.train()
     for epoch in range(1, epochs + 1):
         model.train()
         for batch_idx, (X, y) in enumerate(trainloader):
             optimiser.zero_grad()
             output = model(X)
+            y = y.unsqueeze(1)
             loss_val = loss(output, y)
             loss_val.backward()
             optimiser.step()
     return loss_val.data, optimiser, loss, trainloader
+    
 
 def test(model, testloader):
     model.eval()
     mse = 0
     for x, y in testloader:
         y_pred = model(x)
-        # Calculate evaluation metrics
+        y = y.unsqueeze(1)
+        
         mse += loss(y_pred, y)
     return mse, testloader
-
 
 def send_model(model):
     model_bytes = model_to_bytes(model)
