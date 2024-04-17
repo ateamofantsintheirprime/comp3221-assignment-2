@@ -22,15 +22,6 @@ INPUT_FEATURES = 8
 port = int(sys.argv[1])
 sub_client = sys.argv[2]
 
-class Client:
-    def __init__(self, port):
-        self.data_size = 0
-        self.port = port
-        self.active = False
-        self.in_queue = False
-        self.latest_model = None
-        self.latest_round = 0
-
 
 clients = {
     'client1' : Client(6001),

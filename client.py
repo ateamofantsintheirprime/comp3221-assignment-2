@@ -1,7 +1,9 @@
+
 class Client:
-    def __init__(self, id, port):
-        self.id = id
+    def __init__(self, port):
         self.data_size = 0
         self.port = port
         self.active = False
+        self.in_queue = False
         self.latest_model = None
+        self.latest_round = 0
