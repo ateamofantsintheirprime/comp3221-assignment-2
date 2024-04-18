@@ -62,7 +62,7 @@ def train(model, epochs, optimiser, loss, trainloader):
             loss_val = loss(output, y)
             loss_val.backward()
             optimiser.step()
-    return loss_val.data, optimiser, loss, trainloader
+    return model, loss_val.data, optimiser, loss, trainloader
     
 
 def test(model, testloader):
@@ -71,22 +71,26 @@ def test(model, testloader):
     for x, y in testloader:
         y_pred = model(x)
         y = y.unsqueeze(1)
-        
-        mse += loss(y_pred, y)
-    return mse, testloader
 
-def send_model(model):
+        mse += loss(y_pred, y)
+    return model, mse, testloader
+
+def send_model(model, round_number):
+    
     model_bytes = model_to_bytes(model)
+    
     client_message = pickle.dumps({"type": "model",
-                "model" : model_bytes,
-                "round" : round_number})
-                
+            "id" : client_id,
+            "model" : model_bytes,
+            "round" : round_number})
+
     """
     client_message = {"type": "model",
                 "model" : model_bytes,
                 "round" : round_number}
-                """
+    """
     send_socket.sendto(client_message, (ADDRESS,SERVER_PORT))
+    
 
 """
 def get_training_data():
@@ -167,12 +171,13 @@ def get_data(client):
     return x_train, x_test, y_train, y_test, len(train_MedHouseVal), len(test_MedHouseVal)
 
 client_port = client_ports.get(client_id)
+train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
 
 send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
-                "data_size" : batch_size}
+                "data_size" : train_samples}
 message_bytes = pickle.dumps(client_message)
 
 send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
@@ -183,16 +188,7 @@ receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))
 
 # Set up data for training and testing.
-
-"""
-train_data = get_training_data()
-train_X = get_X(train_data)
-train_Y = get_Y(train_data)
-test_data = get_testing_data()
-test_X = get_X(test_data)
-test_y = get_Y(test_data)
-"""
-train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
+#train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
 
 train_data = [(x, y) for x, y in zip(train_X, train_Y)]
 test_data = [(x, y) for x, y in zip(test_X, test_Y)]
@@ -228,10 +224,10 @@ while True:
         update_model(model)
         round_number = message["round"]
 
-        test_MSE, testloader = test(model, testloader)
+        model, test_MSE, testloader = test(model, testloader)
         print("Testing MSE: {}".format(test_MSE))
 
-        train_MSE, optimiser, loss, trainloader = train(model, LOCAL_EPOCHS, optimiser, loss, trainloader)
+        model, train_MSE, optimiser, loss, trainloader = train(model, LOCAL_EPOCHS, optimiser, loss, trainloader)
         print("Training MSE: {}".format(train_MSE))
 
         log_input = "TestMSE: {}, TrainMSE: {}\n".format(test_MSE, train_MSE)
@@ -240,8 +236,8 @@ while True:
             myfile.write(log_input)
         
         print("Sending new local model")
-        send_model(model)
-
+        send_model(model, round_number)
+        round_number+=1
 
 time.sleep(1)
 

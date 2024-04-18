@@ -6,4 +6,4 @@ class Client:
         self.active = False
         self.in_queue = False
         self.latest_model = None
-        self.latest_round = 0
+        self.latest_round = -1

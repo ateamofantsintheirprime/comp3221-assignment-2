@@ -12,14 +12,15 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 
-COMMUNICATION_ROUNDS = 100
+COMMUNICATION_ROUNDS = 5
 BATCH_SIZE = 64
 CLIENT_COUNT = 5 # dont change this
 ADDRESS = '127.0.0.1'
 INPUT_FEATURES = 8
 
 port = int(sys.argv[1])
-sub_client = sys.argv[2]
+sub_client = int(sys.argv[2])
+
 
 
 clients = {
@@ -64,12 +65,14 @@ def add_client(id, data_size):
     print(f"Received handshake from client {id}")
 
 def receive_packet(socket):
-    message, client_address = socket.recvfrom(1024)
+    #message, client_address = socket.recvfrom(1024)
+    message, client_address = socket.recvfrom(2048)
     message = pickle.loads(message)
     if message["type"] == "handshake":
         add_client(message['id'], message['data_size'])
     if message["type"] == "model":
-        add_model(message["model"])
+        add_model(message)
+        print("ADDED MODEL")
 
 def listening_loop(socket):
     while True:
@@ -77,46 +80,58 @@ def listening_loop(socket):
 
 def add_model(message):
     client_id = message['id']
-    print(f"getting local model from client {client_id}")
+    print(f"getting local model from {client_id}")
     if client_id not in clients.keys():
         print(f"error, client {client_id} attempted to send a model before handshaking")
         return
-    clients[client_id].latest_model = message['model']
+    clients[client_id].latest_model = model_from_bytes(message['model'])
     clients[client_id].latest_round = message['round']
 
 def wait_for_client_training(round_number):
     all_clients_completed = False
     while not all_clients_completed:
         all_clients_completed = True
-        for c in clients.values():
+        test = 0
+        usable_clients = [c for c in clients.values() if c.active]
+        for c in usable_clients:
+            #PROBLEM WHEN NEW CLIENT IS ADDED AS THEY HAVE DIFF ROUND NUM
             if c.latest_round != round_number:
                 all_clients_completed = False
                 time.sleep(1) # dont want to spam too hard
                 break
 
 def get_total_data_size() -> int:
-    sum([c.data_size for c in clients.keys()])
+    return sum([c.data_size for c in clients.values()])
 
 
-def aggregate_models(round_number) -> LinearRegressionModel:
+def aggregate_models(global_model, round_number) -> LinearRegressionModel:
     # Zero out global model
     for param in global_model.parameters():
         param.data = torch.zeros_like(param.data)
     
     # Not all clients will be active
-    usable_clients = [c for c in clients.value() if c.active]
+    usable_clients = [c for c in clients.values() if c.active]
     
     # Get selection of clients for aggregating based on subsampling specifications
     aggregate_clients = usable_clients
     if sub_client != 0:
+        print("a")
         # This line will cause issues if < K clients have provided a model this round. Consult specs
         aggregate_clients = random.sample(usable_clients, sub_client)
 
     # Aggregate sampled client models into global model
-    for client in aggregate_clients():
+    for client in aggregate_clients:
+
+        """ORIGINAL BEFORE CHANGE
+        for client in aggregate_clients():
         sample_size_ratio = client.data_size / get_total_data_size()
         global_model.data += client.latest_model.data.clone() * sample_size_ratio
-    
+        """
+        
+        for server_param, user_param in zip(global_model.parameters(), client.latest_model.parameters()):
+            sample_size_ratio = client.data_size / get_total_data_size()
+            server_param.data = server_param.data + user_param.data.clone() * sample_size_ratio
+        
     return global_model
 
 def model_to_bytes(model):
@@ -184,7 +199,7 @@ global_model = nn.Linear(INPUT_FEATURES, 1)
 for i in range(COMMUNICATION_ROUNDS):
     distribute_global_model(global_model, i)
     wait_for_client_training(i)
-    aggregate_models(i)
+    aggregate_models(global_model, i)
 
 #After T training rounds are completed, send finish messages to clients and close sockets
 send_finish_message()
