@@ -13,7 +13,7 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 
-COMMUNICATION_ROUNDS = 50
+COMMUNICATION_ROUNDS = 100
 BATCH_SIZE = 64
 CLIENT_COUNT = 5 # dont change this
 ADDRESS = '127.0.0.1'
@@ -62,7 +62,7 @@ def listening_loop(socket):
 
 def add_model(message):
     client_id = message['id']
-    print(f"getting local model from {client_id}")
+    # print(f"getting local model from {client_id}")
     if client_id not in clients.keys():
         print(f"error, client {client_id} attempted to send a model before handshaking")
         return
@@ -151,6 +151,9 @@ def distribute_global_model(model, round_number):
     # print(message)
     for id in clients.keys():
         client = clients[id]
+        if client.in_queue:
+            client.in_queue = False
+            client.active = True
         sock.sendto(message, (ADDRESS, client.port))
 
 if port != 6000:
@@ -168,29 +171,23 @@ if message["type"] == "handshake":
     add_client(message['id'], message['data_size'])
 else:
     raise Exception
-
 #Once the first connection is made, the program waits 30 seconds before moving on.
-#5 is just the placeholder time
-
-s.settimeout(5)
-
-# thirty_seconds_elapsed = True
-s.settimeout(None)
 
 listen_thread = threading.Thread(target=listening_loop, args=(s,))
+listen_thread.daemon = True
 listen_thread.start()
 
+time.sleep(10) # wait 10 seconds for now
 print("Starting Federated Learning Now")
-time.sleep(1)
 
 global_model = nn.Linear(INPUT_FEATURES, 1)
 
 
 for i in range(COMMUNICATION_ROUNDS):
-    print(f"ROUND: {i}")
     distribute_global_model(global_model, i)
     wait_for_client_training(i)
     aggregate_models(global_model)
+    print(f"ROUND: {i}, mse:", test_mse[-1])
 #After T training rounds are completed, send finish messages to clients and close sockets
 print(test_mse)
 send_finish_message()
@@ -198,9 +195,10 @@ send_finish_message()
 plt.figure(1,figsize=(5, 5))
 plt.plot(test_mse, label="FedAvg", linewidth  = 1)
 #plt.ylim([0.9,  0.99])
+plt.yscale('log')
 plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
 plt.ylabel('Testing MSE')
 plt.xlabel('Global rounds')
 plt.show()
 listening_loop_flag = False
-listen_thread.join(1)
+listen_thread.join(timeout=1)

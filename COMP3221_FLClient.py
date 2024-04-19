@@ -18,7 +18,7 @@ client_id = sys.argv[1]
 client_port = int(sys.argv[2])
 ADDRESS = '127.0.0.1'
 SERVER_PORT = 6000
-LOCAL_EPOCHS = 5
+LOCAL_EPOCHS = 50
 LEARNING_RATE = 0.0000001
 INPUT_FEATURES = 8
 opt_method = bool(sys.argv[3])
@@ -76,11 +76,14 @@ def train(epochs):
             # print("y: ", y)
             loss_val = loss(output, y)
             # print("loss_val:", loss_val)
-            # print("model parameter gradients before backard(): ")
+            loss_val.backward()
+            # print("model parameter gradients before clipping: ")
             # for param in local_model.parameters():
             #     print(param.grad)
-            loss_val.backward()
-            # print("model parameter gradients: ")
+            # torch.nn.utils.clip_grad_norm_(local_model.parameters(), 10)# print("model parameter gradients: ")
+            # print("model parameter gradients after clipping: ")
+            # for param in local_model.parameters():
+            #     print(param.grad)
             # for param in local_model.parameters():
             #     print(param.grad)
             # print("\tmodel parameters BEFORE optimiser.step: ")
@@ -206,9 +209,9 @@ client_message = {"type": "handshake",
                 "data_size" : train_samples}
 message_bytes = pickle.dumps(client_message)
 
+time.sleep(5)
 send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
 print("sent handshake")
-time.sleep(1)
 receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))
@@ -227,7 +230,7 @@ testloader = DataLoader(train_data, batch_size=len(test_Y))
 
 round_number = 0
 while True:
-    print("I am {}".format(client_id))
+    # print("I am {}".format(client_id))
     message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
     # print("Received:", message)
@@ -247,9 +250,9 @@ while True:
         # for param in local_model.parameters():
         #     print(param)
         train_MSE = train(LOCAL_EPOCHS)
-        print("Training MSE: {}".format(train_MSE))
+        # print("Training MSE: {}".format(train_MSE))
         test_MSE = test()
-        print("Testing MSE: {}".format(test_MSE))
+        # print("Testing MSE: {}".format(test_MSE))
 
         # print("model parameters after training function: ================")
         # for param in local_model.parameters():
