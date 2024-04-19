@@ -1,6 +1,7 @@
 
 class Client:
-    def __init__(self, port):
+    def __init__(self, port, client_id):
+        self.client_id = client_id
         self.data_size = 0
         self.port = port
         self.active = False

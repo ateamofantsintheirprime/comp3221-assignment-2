@@ -25,11 +25,11 @@ sub_client = int(sys.argv[2])
 test_mse = []
 
 clients = {
-    'client1' : Client(6001),
-    'client2' : Client(6002),
-    'client3' : Client(6003),
-    'client4' : Client(6004),
-    'client5' : Client(6005)
+    'client1' : Client(6001, "client1"),
+    'client2' : Client(6002, "client2"),
+    'client3' : Client(6003,"client3"),
+    'client4' : Client(6004,"client4"),
+    'client5' : Client(6005,"client5")
 }
 
 def send_finish_message():
@@ -79,7 +79,6 @@ def wait_for_client_training(round_number):
         test = 0
         usable_clients = [c for c in clients.values() if c.active]
         for c in usable_clients:
-            #PROBLEM WHEN NEW CLIENT IS ADDED AS THEY HAVE DIFF ROUND NUM
             if c.latest_round != round_number:
                 all_clients_completed = False
                 time.sleep(1) # dont want to spam too hard
@@ -109,19 +108,12 @@ def aggregate_models(global_model):
     # Aggregate sampled client models into global model
     t_mse = 0
     for client in aggregate_clients:
-
-        """ORIGINAL BEFORE CHANGE
-        for client in aggregate_clients():
-        sample_size_ratio = client.data_size / get_total_data_size()
-        global_model.data += client.latest_model.data.clone() * sample_size_ratio
-        """
-        # print("user parameters: ")
-        # for param in client.latest_model.parameters():
-        #         print(param)
+        print("Getting local model from: ".format(client.client_id))
         t_mse += client.test_MSE / len(aggregate_clients)
         for server_param, user_param in zip(global_model.parameters(), client.latest_model.parameters()):
             sample_size_ratio = client.data_size / get_total_data_size()
             server_param.data = server_param.data + user_param.data.clone() * sample_size_ratio
+    print("Broadcasting new global model")
     test_mse.append(t_mse)   
 
 def model_to_bytes(model):
@@ -156,6 +148,14 @@ def distribute_global_model(model, round_number):
             client.active = True
         sock.sendto(message, (ADDRESS, client.port))
 
+def get_num_active_clients(clients):
+    active_clients = 0
+    for c in clients.values():
+        if c.active:
+            active_clients += 1
+    
+    return active_clients
+
 if port != 6000:
     print("Port Server Must be 6000")
 
@@ -185,10 +185,13 @@ global_model = nn.Linear(INPUT_FEATURES, 1)
 
 
 for i in range(COMMUNICATION_ROUNDS):
+    print("Global Iteration {}:".format(i))
+    print("Total Number of clients: {}".format(get_num_active_clients(clients)))
+
     distribute_global_model(global_model, i)
     wait_for_client_training(i)
     aggregate_models(global_model)
-    print(f"ROUND: {i}, mse:", test_mse[-1])
+    #print(f"ROUND: {i}, mse:", test_mse[-1])
 #After T training rounds are completed, send finish messages to clients and close sockets
 print(test_mse)
 send_finish_message()
