@@ -1,1 +1,1 @@
-/SSID_COMP3221_Readme.txt
+../SSID_COMP3221_Readme.txt
