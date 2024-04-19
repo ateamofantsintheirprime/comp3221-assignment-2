@@ -13,12 +13,10 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 
-COMMUNICATION_ROUNDS = 100
-BATCH_SIZE = 64
+COMMUNICATION_ROUNDS = 20
 CLIENT_COUNT = 5 # dont change this
 ADDRESS = '127.0.0.1'
 INPUT_FEATURES = 8
-listening_loop_flag = True
 
 port = int(sys.argv[1])
 sub_client = int(sys.argv[2])
@@ -57,7 +55,7 @@ def receive_packet(socket):
         add_model(message)
 
 def listening_loop(socket):
-    while listening_loop_flag:
+    while True:
         receive_packet(socket)
 
 def add_model(message):
@@ -100,7 +98,7 @@ def aggregate_models(global_model):
     # Get selection of clients for aggregating based on subsampling specifications
     aggregate_clients = usable_clients
     if sub_client != 0:
-        print("Taking a subsample of clients for aggregation")
+        # print("Taking a subsample of clients for aggregation")
         # This line will cause issues if < K clients have provided a model this round. Consult specs
         #   ^^^^^ The above comment should be ignored, I will remove it in the next commit. The round will not progress
         #   unless all clients have provided a model. There is no timing out/ crashing in this assignment.
@@ -193,13 +191,12 @@ for i in range(COMMUNICATION_ROUNDS):
 print(test_mse)
 send_finish_message()
 
-plt.figure(1,figsize=(5, 5))
-plt.plot(test_mse, label="FedAvg", linewidth  = 1)
-#plt.ylim([0.9,  0.99])
-plt.yscale('log')
-plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
-plt.ylabel('Testing MSE')
-plt.xlabel('Global rounds')
-plt.show()
-listening_loop_flag = False
+# plt.figure(1,figsize=(5, 5))
+# plt.plot(test_mse, label="FedAvg", linewidth  = 1)
+# #plt.ylim([0.9,  0.99])
+# plt.yscale('log')
+# plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
+# plt.ylabel('Testing MSE')
+# plt.xlabel('Global rounds')
+# plt.show()
 listen_thread.join(timeout=1)

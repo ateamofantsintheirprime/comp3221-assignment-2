@@ -1,1 +1,1 @@
-clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0
+clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;
