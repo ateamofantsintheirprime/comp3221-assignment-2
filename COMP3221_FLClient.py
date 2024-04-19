@@ -84,7 +84,7 @@ send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
-                "data_size" : BATCH_SIZE}
+                "data_size" : batch_size}
 message_bytes = pickle.dumps(client_message)
 
 send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
