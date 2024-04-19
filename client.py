@@ -7,3 +7,5 @@ class Client:
         self.in_queue = False
         self.latest_model = None
         self.latest_round = -1
+        self.train_MSE = -1
+        self.test_MSE = -1

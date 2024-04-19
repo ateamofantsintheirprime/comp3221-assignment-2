@@ -6,22 +6,23 @@ import numpy as np
 from torch.utils.data import DataLoader
 from LinearRegressionModel import *
 from client import Client
-
+import matplotlib
+import matplotlib.pyplot as plt
 
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 
-COMMUNICATION_ROUNDS = 5
+COMMUNICATION_ROUNDS = 50
 BATCH_SIZE = 64
 CLIENT_COUNT = 5 # dont change this
 ADDRESS = '127.0.0.1'
 INPUT_FEATURES = 8
+listening_loop_flag = True
 
 port = int(sys.argv[1])
 sub_client = int(sys.argv[2])
-
-
+test_mse = []
 
 clients = {
     'client1' : Client(6001),
@@ -30,23 +31,6 @@ clients = {
     'client4' : Client(6004),
     'client5' : Client(6005)
 }
-
-
-# thirty_seconds_elapsed = False
-
-# def update_client_list():
-#     for i in range(0,5):
-#         if client_list[i] == None:
-#             if temp_client_list[i] != None:
-#                 client_list[i] = temp_client_list[i]
-
-# def print_client_list():
-#     for c in client_list:
-#         if c != None:
-#             print(c.get_client_id())
-#         else:
-#             print("None")
-
 
 def send_finish_message():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -65,17 +49,15 @@ def add_client(id, data_size):
     print(f"Received handshake from client {id}")
 
 def receive_packet(socket):
-    #message, client_address = socket.recvfrom(1024)
-    message, client_address = socket.recvfrom(2048)
+    message, client_address = socket.recvfrom(4096)
     message = pickle.loads(message)
     if message["type"] == "handshake":
         add_client(message['id'], message['data_size'])
     if message["type"] == "model":
         add_model(message)
-        print("ADDED MODEL")
 
 def listening_loop(socket):
-    while True:
+    while listening_loop_flag:
         receive_packet(socket)
 
 def add_model(message):
@@ -85,7 +67,10 @@ def add_model(message):
         print(f"error, client {client_id} attempted to send a model before handshaking")
         return
     clients[client_id].latest_model = model_from_bytes(message['model'])
+    
     clients[client_id].latest_round = message['round']
+    clients[client_id].train_MSE = message['train_MSE']
+    clients[client_id].test_MSE = message['test_MSE']
 
 def wait_for_client_training(round_number):
     all_clients_completed = False
@@ -104,7 +89,7 @@ def get_total_data_size() -> int:
     return sum([c.data_size for c in clients.values()])
 
 
-def aggregate_models(global_model, round_number) -> LinearRegressionModel:
+def aggregate_models(global_model):
     # Zero out global model
     for param in global_model.parameters():
         param.data = torch.zeros_like(param.data)
@@ -115,11 +100,14 @@ def aggregate_models(global_model, round_number) -> LinearRegressionModel:
     # Get selection of clients for aggregating based on subsampling specifications
     aggregate_clients = usable_clients
     if sub_client != 0:
-        print("a")
+        print("Taking a subsample of clients for aggregation")
         # This line will cause issues if < K clients have provided a model this round. Consult specs
+        #   ^^^^^ The above comment should be ignored, I will remove it in the next commit. The round will not progress
+        #   unless all clients have provided a model. There is no timing out/ crashing in this assignment.
         aggregate_clients = random.sample(usable_clients, sub_client)
 
     # Aggregate sampled client models into global model
+    t_mse = 0
     for client in aggregate_clients:
 
         """ORIGINAL BEFORE CHANGE
@@ -127,12 +115,14 @@ def aggregate_models(global_model, round_number) -> LinearRegressionModel:
         sample_size_ratio = client.data_size / get_total_data_size()
         global_model.data += client.latest_model.data.clone() * sample_size_ratio
         """
-        
+        # print("user parameters: ")
+        # for param in client.latest_model.parameters():
+        #         print(param)
+        t_mse += client.test_MSE / len(aggregate_clients)
         for server_param, user_param in zip(global_model.parameters(), client.latest_model.parameters()):
             sample_size_ratio = client.data_size / get_total_data_size()
             server_param.data = server_param.data + user_param.data.clone() * sample_size_ratio
-        
-    return global_model
+    test_mse.append(t_mse)   
 
 def model_to_bytes(model):
     buffer = io.BytesIO()
@@ -176,8 +166,8 @@ message, client_address = s.recvfrom(2048)
 message = pickle.loads(message)
 if message["type"] == "handshake":
     add_client(message['id'], message['data_size'])
-if message["type"] == "model":
-    add_model(message)
+else:
+    raise Exception
 
 #Once the first connection is made, the program waits 30 seconds before moving on.
 #5 is just the placeholder time
@@ -191,18 +181,26 @@ listen_thread = threading.Thread(target=listening_loop, args=(s,))
 listen_thread.start()
 
 print("Starting Federated Learning Now")
-#do federated learning here
 time.sleep(1)
 
 global_model = nn.Linear(INPUT_FEATURES, 1)
 
+
 for i in range(COMMUNICATION_ROUNDS):
+    print(f"ROUND: {i}")
     distribute_global_model(global_model, i)
     wait_for_client_training(i)
-    aggregate_models(global_model, i)
-
+    aggregate_models(global_model)
 #After T training rounds are completed, send finish messages to clients and close sockets
+print(test_mse)
 send_finish_message()
 
-
-# s.close()
+plt.figure(1,figsize=(5, 5))
+plt.plot(test_mse, label="FedAvg", linewidth  = 1)
+#plt.ylim([0.9,  0.99])
+plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
+plt.ylabel('Testing MSE')
+plt.xlabel('Global rounds')
+plt.show()
+listening_loop_flag = False
+listen_thread.join(1)

@@ -18,8 +18,8 @@ client_id = sys.argv[1]
 client_port = int(sys.argv[2])
 ADDRESS = '127.0.0.1'
 SERVER_PORT = 6000
-LOCAL_EPOCHS = 4
-LEARNING_RATE = .01
+LOCAL_EPOCHS = 5
+LEARNING_RATE = 0.0000001
 INPUT_FEATURES = 8
 opt_method = bool(sys.argv[3])
 batch_size = 64 # ?
@@ -30,6 +30,15 @@ client_ports = {"client1": 6001,
                "client5": 6005
 }
 
+
+# Define loss function
+
+loss = nn.MSELoss(reduction='mean')
+
+local_model = nn.Linear(INPUT_FEATURES, 1)
+
+
+optimiser = torch.optim.SGD(local_model.parameters(), lr=LEARNING_RATE)
 
 def model_to_bytes(model):
     buffer = io.BytesIO()
@@ -49,46 +58,63 @@ def update_model(model):
     # Copy new model data to local model
     for old, new in zip(local_model.parameters(), model.parameters()):
         old.data = new.data.clone()
-    print(f"updating local model to {model}")
 
-def train(model, epochs, optimiser, loss, trainloader):
-    model.train()
+def train(epochs):
+    local_model.train()
     for epoch in range(1, epochs + 1):
-        model.train()
+        local_model.train()
         for batch_idx, (X, y) in enumerate(trainloader):
+            # print("BEGINNING NEW BATCH!!!!! =================")
+            # print("model parameter gradients before zero_grad(): ")
+            # for param in local_model.parameters():
+            #     print(param.grad)
+            # model.zero_grad()
             optimiser.zero_grad()
-            output = model(X)
-            y = y.unsqueeze(1)
+            output = local_model(X).reshape(-1)
+            # print("output: ", output)
+            # # y = y.unsqueeze(1)
+            # print("y: ", y)
             loss_val = loss(output, y)
+            # print("loss_val:", loss_val)
+            # print("model parameter gradients before backard(): ")
+            # for param in local_model.parameters():
+            #     print(param.grad)
             loss_val.backward()
+            # print("model parameter gradients: ")
+            # for param in local_model.parameters():
+            #     print(param.grad)
+            # print("\tmodel parameters BEFORE optimiser.step: ")
+            # for param in local_model.parameters():
+            #     print(param)
             optimiser.step()
-    return model, loss_val.data, optimiser, loss, trainloader
+            # print("\tmodel parameters AFTER optimiser.step: ")
+            # for param in local_model.parameters():
+            #     print(param)
+            # print("model statedict after updating grads: ", model.state_dict())
+    return loss_val.data
     
 
-def test(model, testloader):
-    model.eval()
+def test():
+    local_model.eval()
     mse = 0
     for x, y in testloader:
-        y_pred = model(x)
+        y_pred = local_model(x)
         y = y.unsqueeze(1)
 
         mse += loss(y_pred, y)
-    return model, mse, testloader
+    return mse.tolist()
 
-def send_model(model, round_number):
+def send_model(model, round_number, test_MSE, train_MSE):
     
     model_bytes = model_to_bytes(model)
     
     client_message = pickle.dumps({"type": "model",
             "id" : client_id,
             "model" : model_bytes,
-            "round" : round_number})
+            "round" : round_number,
+            "test_MSE": test_MSE,
+            "train_MSE": train_MSE})
 
-    """
-    client_message = {"type": "model",
-                "model" : model_bytes,
-                "round" : round_number}
-    """
     send_socket.sendto(client_message, (ADDRESS,SERVER_PORT))
     
 
@@ -199,82 +225,40 @@ if not opt_method: # Set batch size to full training data size for regular GD
 trainloader = DataLoader(train_data, batch_size=batch_size)
 testloader = DataLoader(train_data, batch_size=len(test_Y))
 
-# Define loss function
-
-loss = nn.MSELoss()
-
-local_model = nn.Linear(INPUT_FEATURES, 1)
-
-
-optimiser = torch.optim.SGD(local_model.parameters(), lr=LEARNING_RATE)
-
 round_number = 0
 while True:
     print("I am {}".format(client_id))
     message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
-    print("Received new global model")
-    print("Received:", message)
+    # print("Received:", message)
     if not message or message["type"] == "finish":
         break
     
     if message["type"] == "model":
-        print("Received new global model")
+        # print("Received new global model")
         model = model_from_bytes(message['model'])
         update_model(model)
         round_number = message["round"]
 
-        model, test_MSE, testloader = test(model, testloader)
+        # print("model parameter gradients: ")
+        # for param in local_model.parameters():
+        #     print(param.grad)
+        # # print("model parameters before training function: ================")
+        # for param in local_model.parameters():
+        #     print(param)
+        train_MSE = train(LOCAL_EPOCHS)
+        print("Training MSE: {}".format(train_MSE))
+        test_MSE = test()
         print("Testing MSE: {}".format(test_MSE))
 
-        model, train_MSE, optimiser, loss, trainloader = train(model, LOCAL_EPOCHS, optimiser, loss, trainloader)
-        print("Training MSE: {}".format(train_MSE))
+        # print("model parameters after training function: ================")
+        # for param in local_model.parameters():
+        #     print(param)
 
         log_input = "TestMSE: {}, TrainMSE: {}\n".format(test_MSE, train_MSE)
         file_name = "Logs/" + client_id + ".txt"
         with open(file_name, "a") as myfile:
             myfile.write(log_input)
         
-        print("Sending new local model")
-        send_model(model, round_number)
-        round_number+=1
-
-time.sleep(1)
-
-# send_socket.close()
-# receive_socket.close()
-
-
-
-
-
-
-
-# class Client():
-#     def __init__(self, id, port, opt_method):
-#         assert id in ['client1','client2','client3','client4','client5']
-#         assert port in range(6001,6006)
-#         assert opt_method in [0,1]
-#         self.id = id
-#         self.port = port
-#         self.opt_method = opt_method
-
-#         self.loss = nn.MSELoss()
-#         self.model = self.await_global_model()
-#         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=learning_rate)
-
-
-#     def set_parameters(self, model):
-#         for old_param, new_param in zip(self.model.parameters(), model.parameters()):
-#             old_param.data = new_param.data.clone()
-
-#     def await_global_model(self) -> LinearRegressionModel:
-#         pass
-
-#     def train(self):
-#         pass
-        
-
-
-# # config_file =  os.path.join(os.getcwd(), "configs", sys.argv[3])
-# n = Client(id=sys.argv[1], port=sys.argv[2], opt_method=sys.argv[3])
+        # print("Sending new local model")
+        send_model(local_model, round_number, test_MSE, train_MSE)
