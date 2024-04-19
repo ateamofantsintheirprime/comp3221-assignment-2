@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.utils.data import DataLoader
-from LinearRegressionModel import *
 from client import Client
 import matplotlib
 import matplotlib.pyplot as plt
@@ -60,7 +59,6 @@ def listening_loop(socket):
 
 def add_model(message):
     client_id = message['id']
-    # print(f"getting local model from {client_id}")
     if client_id not in clients.keys():
         print(f"error, client {client_id} attempted to send a model before handshaking")
         return
@@ -97,10 +95,6 @@ def aggregate_models(global_model):
     # Get selection of clients for aggregating based on subsampling specifications
     aggregate_clients = usable_clients
     if sub_client != 0:
-        # print("Taking a subsample of clients for aggregation")
-        # This line will cause issues if < K clients have provided a model this round. Consult specs
-        #   ^^^^^ The above comment should be ignored, I will remove it in the next commit. The round will not progress
-        #   unless all clients have provided a model. There is no timing out/ crashing in this assignment.
         aggregate_clients = random.sample(usable_clients, sub_client)
 
     # Aggregate sampled client models into global model
@@ -131,14 +125,12 @@ def model_from_bytes(bytes):
 def distribute_global_model(model, round_number):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     model_bytes = model_to_bytes(model)
-    # model_hex = binascii.hexlify(model_bytes).decode('utf-8')
 
     message = pickle.dumps({
         "type" : "model",
         "model" : model_bytes,
         "round" : round_number
     })
-    # print(message)
     for id in clients.keys():
         client = clients[id]
         if client.in_queue:
@@ -176,7 +168,7 @@ listen_thread = threading.Thread(target=listening_loop, args=(s,))
 listen_thread.daemon = True
 listen_thread.start()
 
-time.sleep(3) # wait 10 seconds for now
+time.sleep(30) # wait 10 seconds for now
 print("Starting Federated Learning Now")
 
 global_model = nn.Linear(INPUT_FEATURES, 1)
@@ -193,13 +185,12 @@ for i in range(COMMUNICATION_ROUNDS):
 #After T training rounds are completed, send finish messages to clients and close sockets
 print(test_mse)
 send_finish_message()
+listen_thread.join(timeout=1)
 
 # plt.figure(1,figsize=(5, 5))
 # plt.plot(test_mse, label="FedAvg", linewidth  = 1)
 # #plt.ylim([0.9,  0.99])
-# plt.yscale('log')
 # plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
 # plt.ylabel('Testing MSE')
 # plt.xlabel('Global rounds')
 # plt.show()
-listen_thread.join(timeout=1)

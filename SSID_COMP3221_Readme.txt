@@ -48,7 +48,7 @@ To run the program, the syntax detailed in the specification sheet can be used a
 - python3 COMP3221_FLClient.py <Client-id> <Port-Client> <Opt-Method> for the Client
 - python COMP3221_FLServer.py <Port-Server> <Sub-Client> for the Server
 
-Alternatively, the server + 5 client instance of the program can be ran by doing 
+Alternatively, the server + 5 client instance of the program can be ran (no subsampling) by doing 
 "bash run.sh"
 --------------------------------------------------------
 
@@ -56,5 +56,35 @@ Alternatively, the server + 5 client instance of the program can be ran by doing
 --------------------------------------------------------
 Commands to Reproduce Experimental results
 
+The data in the final table of the report was generated using the following commands:
+
+    Gradient Descent Column, K=1,2,3,4,0:
+    ```
+    clear;python3 COMP3221_FLServer.py 6000 1 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;
+    clear;python3 COMP3221_FLServer.py 6000 2 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;    
+    clear;python3 COMP3221_FLServer.py 6000 3 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;
+    clear;python3 COMP3221_FLServer.py 6000 4 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;
+    clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;
+    ```
+
+    Mini-batch Gradient Descent (64) Column, K=1,2,3,4,0:
+    [Change batch_size on line 25 of COMP3221_FLClient.py to be 64]
+    ```
+    clear;python3 COMP3221_FLServer.py 6000 1 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 2 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 3 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 4 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    ```
+
+    Mini-batch Gradient Descent (64) Column, K=1,2,3,4,0:
+    [Change batch_size on line 25 of COMP3221_FLClient.py to be 32, otherwise the comand is the same]
+    ```
+    clear;python3 COMP3221_FLServer.py 6000 1 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 2 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 3 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 4 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+    ```
 
 --------------------------------------------------------

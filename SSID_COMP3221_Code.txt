@@ -1,6 +1,7 @@
 
 class Client:
-    def __init__(self, port):
+    def __init__(self, port, client_id):
+        self.client_id = client_id
         self.data_size = 0
         self.port = port
         self.active = False
@@ -10,11 +11,11 @@ class Client:
         self.train_MSE = -1
         self.test_MSE = -1
 
+
 import sys, os, torch, sklearn, socket, time, pickle, io, binascii
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from LinearRegressionModel import *
 
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
@@ -31,7 +32,7 @@ client_port = int(sys.argv[2])
 ADDRESS = '127.0.0.1'
 SERVER_PORT = 6000
 LOCAL_EPOCHS = 10
-LEARNING_RATE = 0.00000027
+LEARNING_RATE = 0.0000001
 INPUT_FEATURES = 8
 opt_method = bool(sys.argv[3])
 batch_size = 64 # ?
@@ -76,36 +77,11 @@ def train(epochs):
     for epoch in range(1, epochs + 1):
         local_model.train()
         for batch_idx, (X, y) in enumerate(trainloader):
-            # print("BEGINNING NEW BATCH!!!!! =================")
-            # print("model parameter gradients before zero_grad(): ")
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # model.zero_grad()
             optimiser.zero_grad()
             output = local_model(X).reshape(-1)
-            # print("output: ", output)
-            # # y = y.unsqueeze(1)
-            # print("y: ", y)
             loss_val = loss(output, y)
-            # print("loss_val:", loss_val)
             loss_val.backward()
-            # print("model parameter gradients before clipping: ")
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # torch.nn.utils.clip_grad_norm_(local_model.parameters(), 10)# print("model parameter gradients: ")
-            # print("model parameter gradients after clipping: ")
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # print("\tmodel parameters BEFORE optimiser.step: ")
-            # for param in local_model.parameters():
-            #     print(param)
             optimiser.step()
-            # print("\tmodel parameters AFTER optimiser.step: ")
-            # for param in local_model.parameters():
-            #     print(param)
-            # print("model statedict after updating grads: ", model.state_dict())
     return loss_val.data
     
 
@@ -132,21 +108,6 @@ def send_model(model, round_number, test_MSE, train_MSE):
 
     send_socket.sendto(client_message, (ADDRESS,SERVER_PORT))
     
-
-"""
-def get_training_data():
-    pass
-
-def get_testing_data():
-    pass
-
-def get_X():
-    pass
-
-def get_Y():
-    pass
-    
-"""
 def get_data(client):
     train_MedInc = []
     train_HouseAge = []
@@ -215,7 +176,6 @@ client_port = client_ports.get(client_id)
 train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
 
 send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
                 "data_size" : train_samples}
@@ -226,10 +186,6 @@ send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT))
 print(f"{client_id} sent handshake")
 receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive_socket.bind((ADDRESS,client_port))
-# receive_socket.connect((ADDRESS, client_port))
-
-# Set up data for training and testing.
-#train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
 
 train_data = [(x, y) for x, y in zip(train_X, train_Y)]
 test_data = [(x, y) for x, y in zip(test_X, test_Y)]
@@ -245,7 +201,6 @@ while True:
     # print("I am {}".format(client_id))
     message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
-    # print("Received:", message)
     if not message or message["type"] == "finish":
         break
     
@@ -254,22 +209,10 @@ while True:
         model = model_from_bytes(message['model'])
         update_model(model)
         round_number = message["round"]
-
-        # print("model parameter gradients: ")
-        # for param in local_model.parameters():
-        #     print(param.grad)
-        # # print("model parameters before training function: ================")
-        # for param in local_model.parameters():
-        #     print(param)
         train_MSE = train(LOCAL_EPOCHS)
         # print("Training MSE: {}".format(train_MSE))
         test_MSE = test()
         # print("Testing MSE: {}".format(test_MSE))
-
-        # print("model parameters after training function: ================")
-        # for param in local_model.parameters():
-        #     print(param)
-
         log_input = "TestMSE: {}, TrainMSE: {}\n".format(test_MSE, train_MSE)
         file_name = "Logs/" + client_id + ".txt"
         with open(file_name, "a") as myfile:
@@ -278,14 +221,12 @@ while True:
         # print("Sending new local model")
         send_model(local_model, round_number, test_MSE, train_MSE)
 
-
-import sys, os, torch, socket, threading, copy, random, time, pickle, io, binascii
+        import sys, os, torch, socket, threading, copy, random, time, pickle, io, binascii
 import torch.nn as nn 
 
 import torch.nn.functional as F
 import numpy as np
 from torch.utils.data import DataLoader
-from LinearRegressionModel import *
 from client import Client
 import matplotlib
 import matplotlib.pyplot as plt
@@ -294,23 +235,21 @@ from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
 
 
-COMMUNICATION_ROUNDS = 100
-BATCH_SIZE = 64
+COMMUNICATION_ROUNDS = 20
 CLIENT_COUNT = 5 # dont change this
 ADDRESS = '127.0.0.1'
 INPUT_FEATURES = 8
-listening_loop_flag = True
 
 port = int(sys.argv[1])
 sub_client = int(sys.argv[2])
 test_mse = []
 
 clients = {
-    'client1' : Client(6001),
-    'client2' : Client(6002),
-    'client3' : Client(6003),
-    'client4' : Client(6004),
-    'client5' : Client(6005)
+    'client1' : Client(6001, "client1"),
+    'client2' : Client(6002, "client2"),
+    'client3' : Client(6003,"client3"),
+    'client4' : Client(6004,"client4"),
+    'client5' : Client(6005,"client5")
 }
 
 def send_finish_message():
@@ -338,12 +277,11 @@ def receive_packet(socket):
         add_model(message)
 
 def listening_loop(socket):
-    while listening_loop_flag:
+    while True:
         receive_packet(socket)
 
 def add_model(message):
     client_id = message['id']
-    # print(f"getting local model from {client_id}")
     if client_id not in clients.keys():
         print(f"error, client {client_id} attempted to send a model before handshaking")
         return
@@ -360,7 +298,6 @@ def wait_for_client_training(round_number):
         test = 0
         usable_clients = [c for c in clients.values() if c.active]
         for c in usable_clients:
-            #PROBLEM WHEN NEW CLIENT IS ADDED AS THEY HAVE DIFF ROUND NUM
             if c.latest_round != round_number:
                 all_clients_completed = False
                 time.sleep(1) # dont want to spam too hard
@@ -381,28 +318,17 @@ def aggregate_models(global_model):
     # Get selection of clients for aggregating based on subsampling specifications
     aggregate_clients = usable_clients
     if sub_client != 0:
-        print("Taking a subsample of clients for aggregation")
-        # This line will cause issues if < K clients have provided a model this round. Consult specs
-        #   ^^^^^ The above comment should be ignored, I will remove it in the next commit. The round will not progress
-        #   unless all clients have provided a model. There is no timing out/ crashing in this assignment.
         aggregate_clients = random.sample(usable_clients, sub_client)
 
     # Aggregate sampled client models into global model
     t_mse = 0
     for client in aggregate_clients:
-
-        """ORIGINAL BEFORE CHANGE
-        for client in aggregate_clients():
-        sample_size_ratio = client.data_size / get_total_data_size()
-        global_model.data += client.latest_model.data.clone() * sample_size_ratio
-        """
-        # print("user parameters: ")
-        # for param in client.latest_model.parameters():
-        #         print(param)
+        print("Getting local model from: ".format(client.client_id))
         t_mse += client.test_MSE / len(aggregate_clients)
         for server_param, user_param in zip(global_model.parameters(), client.latest_model.parameters()):
             sample_size_ratio = client.data_size / get_total_data_size()
             server_param.data = server_param.data + user_param.data.clone() * sample_size_ratio
+    print("Broadcasting new global model")
     test_mse.append(t_mse)   
 
 def model_to_bytes(model):
@@ -422,20 +348,26 @@ def model_from_bytes(bytes):
 def distribute_global_model(model, round_number):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     model_bytes = model_to_bytes(model)
-    # model_hex = binascii.hexlify(model_bytes).decode('utf-8')
 
     message = pickle.dumps({
         "type" : "model",
         "model" : model_bytes,
         "round" : round_number
     })
-    # print(message)
     for id in clients.keys():
         client = clients[id]
         if client.in_queue:
             client.in_queue = False
             client.active = True
         sock.sendto(message, (ADDRESS, client.port))
+
+def get_num_active_clients(clients):
+    active_clients = 0
+    for c in clients.values():
+        if c.active:
+            active_clients += 1
+    
+    return active_clients
 
 if port != 6000:
     print("Port Server Must be 6000")
@@ -459,44 +391,36 @@ listen_thread = threading.Thread(target=listening_loop, args=(s,))
 listen_thread.daemon = True
 listen_thread.start()
 
-time.sleep(3) # wait 10 seconds for now
+time.sleep(30) # wait 10 seconds for now
 print("Starting Federated Learning Now")
 
 global_model = nn.Linear(INPUT_FEATURES, 1)
 
 
 for i in range(COMMUNICATION_ROUNDS):
+    print("Global Iteration {}:".format(i))
+    print("Total Number of clients: {}".format(get_num_active_clients(clients)))
+
     distribute_global_model(global_model, i)
     wait_for_client_training(i)
     aggregate_models(global_model)
-    print(f"ROUND: {i}, mse:", test_mse[-1])
+    #print(f"ROUND: {i}, mse:", test_mse[-1])
 #After T training rounds are completed, send finish messages to clients and close sockets
 print(test_mse)
 send_finish_message()
-
-plt.figure(1,figsize=(5, 5))
-plt.plot(test_mse, label="FedAvg", linewidth  = 1)
-#plt.ylim([0.9,  0.99])
-plt.yscale('log')
-plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
-plt.ylabel('Testing MSE')
-plt.xlabel('Global rounds')
-plt.show()
-listening_loop_flag = False
 listen_thread.join(timeout=1)
 
-import torch.nn as nn
-## The following is copied from the week 7 tutorial
-class LinearRegressionModel(nn.Module):
-    def __init__(self, input_size = 1):
-        super(LinearRegressionModel, self).__init__()
-        # Create a linear transformation to the incoming data
-        self.linear = nn.Linear(input_size, 1)
+# plt.figure(1,figsize=(5, 5))
+# plt.plot(test_mse, label="FedAvg", linewidth  = 1)
+# #plt.ylim([0.9,  0.99])
+# plt.legend(loc='upper right', prop={'size': 12}, ncol=2)
+# plt.ylabel('Testing MSE')
+# plt.xlabel('Global rounds')
+# plt.show()
 
-    # Define how the model is going to be run, from input to output
-    def forward(self, x):
-        # Apply linear transformation
-        output = self.linear(x)
-        return output.reshape(-1)
-
-clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0
+clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 0 &  python3 COMP3221_FLClient.py client2 6002 0 & python3 COMP3221_FLClient.py client3 6003 0 &  python3 COMP3221_FLClient.py client4 6004 0 & python3 COMP3221_FLClient.py client5 6005 0;
+clear;python3 COMP3221_FLServer.py 6000 1 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+clear;python3 COMP3221_FLServer.py 6000 2 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+clear;python3 COMP3221_FLServer.py 6000 3 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+clear;python3 COMP3221_FLServer.py 6000 4 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;
+clear;python3 COMP3221_FLServer.py 6000 0 & python3 COMP3221_FLClient.py client1 6001 1 &  python3 COMP3221_FLClient.py client2 6002 1 & python3 COMP3221_FLClient.py client3 6003 1 &  python3 COMP3221_FLClient.py client4 6004 1 & python3 COMP3221_FLClient.py client5 6005 1;

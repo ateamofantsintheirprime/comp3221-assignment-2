@@ -2,7 +2,6 @@ import sys, os, torch, sklearn, socket, time, pickle, io, binascii
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from LinearRegressionModel import *
 
 from sklearn.datasets import make_regression
 from sklearn.model_selection import train_test_split
@@ -64,36 +63,11 @@ def train(epochs):
     for epoch in range(1, epochs + 1):
         local_model.train()
         for batch_idx, (X, y) in enumerate(trainloader):
-            # print("BEGINNING NEW BATCH!!!!! =================")
-            # print("model parameter gradients before zero_grad(): ")
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # model.zero_grad()
             optimiser.zero_grad()
             output = local_model(X).reshape(-1)
-            # print("output: ", output)
-            # # y = y.unsqueeze(1)
-            # print("y: ", y)
             loss_val = loss(output, y)
-            # print("loss_val:", loss_val)
             loss_val.backward()
-            # print("model parameter gradients before clipping: ")
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # torch.nn.utils.clip_grad_norm_(local_model.parameters(), 10)# print("model parameter gradients: ")
-            # print("model parameter gradients after clipping: ")
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # for param in local_model.parameters():
-            #     print(param.grad)
-            # print("\tmodel parameters BEFORE optimiser.step: ")
-            # for param in local_model.parameters():
-            #     print(param)
             optimiser.step()
-            # print("\tmodel parameters AFTER optimiser.step: ")
-            # for param in local_model.parameters():
-            #     print(param)
-            # print("model statedict after updating grads: ", model.state_dict())
     return loss_val.data
     
 
@@ -120,21 +94,6 @@ def send_model(model, round_number, test_MSE, train_MSE):
 
     send_socket.sendto(client_message, (ADDRESS,SERVER_PORT))
     
-
-"""
-def get_training_data():
-    pass
-
-def get_testing_data():
-    pass
-
-def get_X():
-    pass
-
-def get_Y():
-    pass
-    
-"""
 def get_data(client):
     train_MedInc = []
     train_HouseAge = []
@@ -203,7 +162,6 @@ client_port = client_ports.get(client_id)
 train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
 
 send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# send_socket.connect((ADDRESS, SERVER_PORT))
 client_message = {"type": "handshake",
                 "id" : client_id,
                 "data_size" : train_samples}
@@ -214,10 +172,6 @@ send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT))
 print(f"{client_id} sent handshake")
 receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive_socket.bind((ADDRESS,client_port))
-# receive_socket.connect((ADDRESS, client_port))
-
-# Set up data for training and testing.
-#train_X, test_X, train_Y, test_Y, train_samples, test_samples = get_data(client_id)
 
 train_data = [(x, y) for x, y in zip(train_X, train_Y)]
 test_data = [(x, y) for x, y in zip(test_X, test_Y)]
@@ -233,7 +187,6 @@ while True:
     # print("I am {}".format(client_id))
     message, server_address = receive_socket.recvfrom(2048)
     message = pickle.loads(message)
-    # print("Received:", message)
     if not message or message["type"] == "finish":
         break
     
@@ -242,22 +195,10 @@ while True:
         model = model_from_bytes(message['model'])
         update_model(model)
         round_number = message["round"]
-
-        # print("model parameter gradients: ")
-        # for param in local_model.parameters():
-        #     print(param.grad)
-        # # print("model parameters before training function: ================")
-        # for param in local_model.parameters():
-        #     print(param)
         train_MSE = train(LOCAL_EPOCHS)
         # print("Training MSE: {}".format(train_MSE))
         test_MSE = test()
         # print("Testing MSE: {}".format(test_MSE))
-
-        # print("model parameters after training function: ================")
-        # for param in local_model.parameters():
-        #     print(param)
-
         log_input = "TestMSE: {}, TrainMSE: {}\n".format(test_MSE, train_MSE)
         file_name = "Logs/" + client_id + ".txt"
         with open(file_name, "a") as myfile:
