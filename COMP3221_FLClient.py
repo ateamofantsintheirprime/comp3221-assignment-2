@@ -18,8 +18,8 @@ client_id = sys.argv[1]
 client_port = int(sys.argv[2])
 ADDRESS = '127.0.0.1'
 SERVER_PORT = 6000
-LOCAL_EPOCHS = 50
-LEARNING_RATE = 0.0000001
+LOCAL_EPOCHS = 10
+LEARNING_RATE = 0.00000027
 INPUT_FEATURES = 8
 opt_method = bool(sys.argv[3])
 batch_size = 64 # ?
@@ -211,7 +211,7 @@ message_bytes = pickle.dumps(client_message)
 
 time.sleep(5)
 send_socket.sendto(message_bytes, (ADDRESS,SERVER_PORT)) 
-print("sent handshake")
+print(f"{client_id} sent handshake")
 receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 receive_socket.bind((ADDRESS,client_port))
 # receive_socket.connect((ADDRESS, client_port))

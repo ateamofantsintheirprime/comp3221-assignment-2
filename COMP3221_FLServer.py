@@ -46,7 +46,7 @@ def add_client(id, data_size):
     clients[id].active = True
     clients[id].in_queue = True
     clients[id].data_size = data_size
-    print(f"Received handshake from client {id}")
+    print(f"Received handshake from {id}")
 
 def receive_packet(socket):
     message, client_address = socket.recvfrom(4096)
@@ -159,6 +159,7 @@ def distribute_global_model(model, round_number):
 if port != 6000:
     print("Port Server Must be 6000")
 
+print("starting up server")
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((ADDRESS, port))
@@ -177,7 +178,7 @@ listen_thread = threading.Thread(target=listening_loop, args=(s,))
 listen_thread.daemon = True
 listen_thread.start()
 
-time.sleep(10) # wait 10 seconds for now
+time.sleep(3) # wait 10 seconds for now
 print("Starting Federated Learning Now")
 
 global_model = nn.Linear(INPUT_FEATURES, 1)
